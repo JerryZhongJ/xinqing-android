@@ -1,0 +1,9 @@
+build/
+local.properties
+.gradle/
+
+# Local credentials and machine settings
+.env
+.env.*
+__pycache__/
+*.pyc

@@ -1,0 +1,21 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'cn.xinqing.journal'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'cn.xinqing.journal'
+        minSdk 26
+        targetSdk 34
+        versionCode 26
+        versionName '1.25'
+    }
+    sourceSets.main {
+        manifest.srcFile '../AndroidManifest.xml'
+        java.srcDirs = ['../src']
+        res.srcDirs = ['../res']
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}

@@ -1,0 +1,4 @@
+<!-- Lucide circle-check, ISC. See res/raw/lucide_license.txt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="20dp" android:height="20dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#20312E" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M22,11.08V12a10,10 0,1 1,-5.93,-9.14 M8,11l4,4L22,5" />
+</vector>
