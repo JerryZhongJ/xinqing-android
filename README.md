@@ -10,9 +10,9 @@
 
 ## 界面预览
 
-| 情绪评分 | 选择方法 | AI 辅助示例 |
+| 情绪评分 | 选择方法 | AI 求助入口 |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/flow.webp" alt="情绪评分页面" width="220"> | <img src="docs/screenshots/methods.webp" alt="想法探索中的方法列表" width="220"> | <img src="docs/screenshots/ai.webp" alt="AI 对认知歪曲的建议" width="220"> |
+| <img src="docs/screenshots/flow.webp" alt="情绪评分页面" width="220"> | <img src="docs/screenshots/methods.webp" alt="想法探索中的方法列表" width="220"> | <img src="docs/screenshots/ai.webp" alt="自动想法页面的 AI 求助入口" width="220"> |
 
 ## 从源码安装
 
