@@ -540,20 +540,16 @@ public class MainActivity extends Activity {
         return record.optBoolean("done")?"已记录":"填写中";
     }
     private android.widget.FrameLayout dialogFrame(View content) {
-        android.widget.FrameLayout frame=new android.widget.FrameLayout(this);
-        if(content instanceof ScrollView){ScrollView scroll=(ScrollView)content;scroll.setFillViewport(false);scroll.setSmoothScrollingEnabled(true);}
-        frame.addView(content,new android.widget.FrameLayout.LayoutParams(-1,Math.min(dp(440),(int)(getResources().getDisplayMetrics().heightPixels*0.58))));
-        frame.getViewTreeObserver().addOnGlobalLayoutListener(()->{
-            int available=getResources().getDisplayMetrics().heightPixels;
-            if(android.os.Build.VERSION.SDK_INT>=30){
-                android.view.WindowInsets insets=frame.getRootWindowInsets();
-                if(insets!=null)available-=insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
-            }else{
-                android.graphics.Rect visible=new android.graphics.Rect();getWindow().getDecorView().getWindowVisibleDisplayFrame(visible);if(visible.height()>0)available=Math.min(available,visible.height());
+        android.widget.FrameLayout frame=new android.widget.FrameLayout(this) {
+            @Override protected void onMeasure(int widthMeasureSpec,int heightMeasureSpec) {
+                int limit=dp(440);
+                if(View.MeasureSpec.getMode(heightMeasureSpec)!=View.MeasureSpec.UNSPECIFIED)
+                    limit=Math.min(limit,View.MeasureSpec.getSize(heightMeasureSpec));
+                super.onMeasure(widthMeasureSpec,View.MeasureSpec.makeMeasureSpec(limit,View.MeasureSpec.AT_MOST));
             }
-            int height=Math.max(dp(130),Math.min(dp(440),available-dp(190)));
-            ViewGroup.LayoutParams size=content.getLayoutParams();if(size.height!=height){size.height=height;content.setLayoutParams(size);}
-        });
+        };
+        if(content instanceof ScrollView){ScrollView scroll=(ScrollView)content;scroll.setFillViewport(false);scroll.setSmoothScrollingEnabled(true);}
+        frame.addView(content,new android.widget.FrameLayout.LayoutParams(-1,-2));
         return frame;
     }
     private View methodChoice(String heading,String state,String purpose,String reason,Runnable action) {
