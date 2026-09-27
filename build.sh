@@ -13,6 +13,9 @@ jar cf build/classes.jar -C build/classes .
 cp build/base.apk build/unsigned.apk
 (cd build/dex && zip -q -u ../unsigned.apk classes.dex)
 "$BT/zipalign" -f 4 build/unsigned.apk build/aligned.apk
+if [ ! -f build/debug.keystore ] && [ -f .signing/debug.keystore ]; then
+    cp .signing/debug.keystore build/debug.keystore
+fi
 if [ ! -f build/debug.keystore ]; then
     keytool -genkeypair -keystore build/debug.keystore -storepass android -keypass android -alias androiddebugkey -dname "CN=Android Debug" -keyalg RSA -keysize 2048 -validity 10000
 fi

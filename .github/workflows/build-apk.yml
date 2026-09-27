@@ -26,10 +26,26 @@ jobs:
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Restore signing key
+        if: github.event_name != 'pull_request'
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.ANDROID_SIGNING_KEY_BASE64 }}
+        run: |
+          test -n "$SIGNING_KEY_BASE64" || { echo "ANDROID_SIGNING_KEY_BASE64 is missing"; exit 1; }
+          mkdir -p build
+          printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > build/debug.keystore
+
       - name: Build APK
         run: bash build.sh
 
+      - name: Verify upgrade signing key
+        if: github.event_name != 'pull_request'
+        run: |
+          actual="$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs build/xinqing.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          test "$actual" = 'fe3b1e7e7c5479381c932073c3bead23909ae57e9e3d36c47e89d7991d1d3d06'
+
       - name: Upload APK
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: xinqing-debug-apk

@@ -18,6 +18,6 @@
 
 运行 `bash build.sh` 生成 `build/xinqing.apk`，再运行 `adb install -r build/xinqing.apk` 安装到手机。构建需要 JDK 17、Android SDK Platform 34 和 Build Tools 34.0.0。
 
-每次提交和 Pull Request 都会在 GitHub Actions 构建。运行结束后，可从 **Actions → Build Android APK → Artifacts** 下载 `xinqing-debug-apk`。Actions 使用临时调试签名；不同运行生成的 APK 签名不同，无法直接覆盖安装。已有数据需要保留时，请用同一签名自行构建。
+GitHub Actions 会检查每个 Pull Request，并为分支提交生成 APK。运行结束后，可从 **Actions → Build Android APK → Artifacts** 下载 `xinqing-debug-apk`。下载包使用与现有安装相同的签名，可直接覆盖升级并保留日志。`build.sh` 在 `build/debug.keystore` 缺失时会使用本机备份 `.signing/debug.keystore`；请私下备份这把密钥，不要提交到仓库。
 
 日志保存在设备上，不需要账号。只有主动点击 AI 求助时，相关内容才会发送给 DeepSeek。心晴是独立开发的自助记录工具，并非《Feeling Great》官方产品，也不能替代专业诊断或治疗。
