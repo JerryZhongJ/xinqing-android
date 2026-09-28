@@ -55,6 +55,7 @@ jobs:
         run: |
           test -n "$SIGNING_KEY_BASE64" || { echo "ANDROID_SIGNING_KEY_BASE64 is missing"; exit 1; }
           mkdir -p build
+          umask 077
           printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > build/debug.keystore
 
       - name: Build APK
@@ -64,6 +65,9 @@ jobs:
         run: |
           actual="$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs build/xinqing.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
           test "$actual" = 'fe3b1e7e7c5479381c932073c3bead23909ae57e9e3d36c47e89d7991d1d3d06'
+
+      - name: Remove signing key
+        run: rm build/debug.keystore
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
