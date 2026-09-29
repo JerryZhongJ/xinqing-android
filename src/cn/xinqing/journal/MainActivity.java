@@ -322,6 +322,9 @@ public class MainActivity extends Activity {
         aiHeading(parent,heading,TypeRole.SECTION,task,thought,attempt,page,refresh);
     }
     private void aiHeading(LinearLayout parent,String heading,TypeRole headingRole,String task,JSONObject thought,JSONObject attempt,int page,Runnable refresh) {
+        aiHeading(parent,heading,headingRole,task,thought,attempt,page,refresh,null);
+    }
+    private void aiHeading(LinearLayout parent,String heading,TypeRole headingRole,String task,JSONObject thought,JSONObject attempt,int page,Runnable refresh,String hint) {
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
         int headingSize=headingRole==TypeRole.SECTION?17:16;
         TextView question=styledText(heading,headingRole);question.setPadding(0,0,dp(8),0);
@@ -339,6 +342,16 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams spinParams=new FrameLayout.LayoutParams(dp(18),dp(18),Gravity.CENTER);slot.addView(spinner,spinParams);
         row.addView(slot,new LinearLayout.LayoutParams(dp(48),dp(48)));
         LinearLayout.LayoutParams rowLayout=new LinearLayout.LayoutParams(-1,-2);rowLayout.topMargin=dp(topSpace(headingRole));parent.addView(row,rowLayout);
+        if(hint!=null&&!hint.isEmpty()){
+            TextView explanation=styledText(readableGuide(hint),TypeRole.HINT);
+            setRoleSpacing(explanation,TypeRole.HINT);
+            LinearLayout.LayoutParams hintLayout=new LinearLayout.LayoutParams(-1,-2);hintLayout.rightMargin=dp(48);parent.addView(explanation,hintLayout);
+            question.post(()->{
+                int slack=Math.max(0,(row.getHeight()-question.getHeight())/2);
+                int overlap=Math.min(dp(10),Math.max(0,slack-dp(2)));
+                if(hintLayout.topMargin!=-overlap){hintLayout.topMargin=-overlap;explanation.setLayoutParams(hintLayout);}
+            });
+        }
         TextView status=styledText("",TypeRole.META);status.setVisibility(View.GONE);parent.addView(status);
         Runnable reset=()->{spinner.setVisibility(View.GONE);ai.setVisibility(View.VISIBLE);slot.setContentDescription(null);slot.setClickable(false);};
         ai.setOnClickListener(v->{
@@ -411,9 +424,9 @@ public class MainActivity extends Activity {
                 View divider=new View(this);divider.setBackgroundColor(Color.rgb(233,238,235));body.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));gap(body,componentSpace(ComponentRelation.SAME_GROUP));
             }
         } else if(step==2) {
-            title("脑海里闪过什么？","回想这件事时，哪些判断让你难受？先原样记下至少一条，每条一个意思，现在不用纠正它。");
+            title("脑海里出现了什么想法？","回想这件事时，哪些判断让你难受？先原样记下至少一条，每条一个意思，现在不用纠正它。");
             styledLabel(body,"相信程度：0 是完全不相信这句话，100 是完全相信；它与难受的强度不同。",TypeRole.HINT);
-            guide(body,"想不到时，从哪里开始？","这件事对你意味着什么？你担心它说明了自己的什么问题，或意味着怎样的结果？先记录脑中真实出现的判断，不用写成标准答案。");
+            guide(body,"想不到具体想法时","这件事对你意味着什么？你担心它说明了自己的什么问题，或意味着怎样的结果？先记录脑中真实出现的判断，不用写成标准答案。");
             aiHelp(body,"寻找想法",null,null,0);
             for(int i=0;i<thoughts().length();i++) {
                 final int index=i; JSONObject t=thoughts().optJSONObject(i);
@@ -427,8 +440,8 @@ public class MainActivity extends Activity {
             }
             body.addView(button("添加一个想法",false,()->{thoughts().put(new JSONObject());changed();editor();}));
         } else if(step==3) {
-            title("正向重构","看看这些情绪和想法有什么作用，反映了什么在意。这里不找事件的好处，也暂不反驳原想法。");
-            guide(body,"从哪里想起？","先挑一种感受或一句想法：你害怕失去什么？希望做好什么？完全不在意这件事时，你会担心遗漏什么？\n\n只留下符合你的解释，不必证明痛苦一定有好处。");
+            title("正向重构","看看这些情绪和想法为何可以理解、可能起什么作用、体现什么可贵之处。想不到可以留空，之后再补。");
+            guide(body,"想不到作用或品质时","先挑一种感受或一句想法：如果它消失，你担心自己会忽略什么？这可以是线索，答案仍要回到具体的感受或想法。\n\n只留下符合自己的解释，不必认定原想法为真，也不必证明痛苦一定有好处。");
             sectionLabel(body,"刚才记录的情绪");
             boolean any=false;
             for(int i=0;i<EMOTIONS.length;i++)if(hasEmotion(EMOTIONS[i])){compactItem(body,EMOTION_WORDS[i],INK);any=true;}
@@ -436,17 +449,20 @@ public class MainActivity extends Activity {
             sectionLabel(body,"刚才记录的想法");
             for(int i=0;i<thoughts().length();i++){JSONObject t=thoughts().optJSONObject(i);compactItem(body,(i+1)+". "+t.optString("text"),INK);}
             gap(body,componentSpace(ComponentRelation.NEXT_ITEM));
-            aiHeading(body,"可能有什么益处？",TypeRole.QUESTION,"重构益处",null,null,0,()->editor());
-            field(body,"可能有什么益处？","这种感受或想法可能在提醒、保护或推动我做什么？",active,"benefits",3,false);
-            aiHeading(body,"反映了哪些我重视的品质？",TypeRole.QUESTION,"重构品质",null,null,0,()->editor());
-            field(body,"反映了哪些我重视的品质？","这些感受或想法，反映我看重怎样的行为品质？",active,"values",3,false);
-            field(body,"在这个处境中，这些感受为何可以理解？（可选）","对我来说，这件事意味着什么？",active,"understanding",3);
+            TextView understanding=styledText("为什么这份感受或想法可以理解？（可选）",TypeRole.QUESTION);
+            LinearLayout.LayoutParams understandingLayout=new LinearLayout.LayoutParams(-1,-2);understandingLayout.topMargin=dp(topSpace(TypeRole.QUESTION));body.addView(understanding,understandingLayout);
+            styledLabel(body,"结合当时的处境，想想为何会有这种反应；不必认定原想法为真。",TypeRole.HINT);
+            field(body,"为什么这份感受或想法可以理解？（可选）","写下你的理解",active,"understanding",3,false);
+            aiHeading(body,"这份感受或想法可能起什么作用？",TypeRole.QUESTION,"重构益处",null,null,0,()->editor(),"它可能在提醒、保护或推动你做什么？答案要针对感受或想法，而非事件本身。");
+            field(body,"这份感受或想法可能起什么作用？","写下你想到的作用",active,"benefits",3,false);
+            aiHeading(body,"这份感受或想法可能体现出我的什么可贵之处？",TypeRole.QUESTION,"重构品质",null,null,0,()->editor(),"想想它可能反映的品质或核心价值；事件目标和担心的结果只是线索。");
+            field(body,"这份感受或想法可能体现出我的什么可贵之处？","写下可能体现的可贵之处",active,"values",3,false);
         } else if(step==4) {
             title("魔法刻度盘","想象眼前的问题暂时没变，但有一个刻度盘能调整你的感受。如果仍能保留你珍视的品质，你愿意让每种情绪停在多少？");
             styledLabel(body,"这是希望达到的目标，不是现在已经达到的程度。可以保留一些情绪，也可以暂时不改变。",TypeRole.HINT);
             String dialHelp="有没有一个程度，让你仍能认真面对这件事，又不至于被感受淹没？先估一个愿意尝试的目标，以后可以调整。\n\n不是要猜正确数字，也不要求滑动后立刻感觉好转。调整感受不妨碍你继续解决现实问题。";
-            if(!active.optString("values").trim().isEmpty())dialHelp+="\n\n刚才写下的品质：\n"+active.optString("values");
-            guide(body,"不知道怎么选？",dialHelp);
+            if(!active.optString("values").trim().isEmpty())dialHelp+="\n\n刚才写下的可贵之处：\n"+active.optString("values");
+            guide(body,"目标强度怎么选？",dialHelp);
             boolean any=false;
             for(String name:EMOTIONS) if(hasEmotion(name)) {
                 JSONObject e=emotions().optJSONObject(name);
@@ -591,15 +607,14 @@ public class MainActivity extends Activity {
         final AlertDialog[] host={null};Runnable refresh=()->{host[0].dismiss();attemptDialog(index,attempt);};
         LinearLayout detail=col();detail.setPadding(dp(20),dp(8),dp(20),dp(16));
         styledLabel(detail,"第 "+(page+1)+" / 4 步",TypeRole.META,GREEN);styledLabel(detail,attempt.optString("thought"),TypeRole.ITEM);
-        styledLabel(detail,"没帮助时可直接换个方法，当前内容会保留并标为暂未奏效。想之后接着写，可保存并退出。",TypeRole.HINT);
+        if(page==0)styledLabel(detail,"右上角可保存并退出或换方法；已写内容会保留。",TypeRole.HINT);
         if(page<3) {
             if(page==2){
                 guide(detail,"回看前两步",attempt.optString("note0")+"\n\n"+attempt.optString("note1"));
                 styledLabel(detail,"把前面的发现汇成一段你认可的回应。这段内容会直接带到最后，无需重写。",TypeRole.HINT);
             }
-            aiHeading(detail,method.questions[page],TypeRole.QUESTION,page==2?"形成回应":"当前问题",thought,attempt,page,refresh);
             String questionHint=ThoughtMethods.hint(method.id,page);
-            if(!questionHint.isEmpty())styledLabel(detail,questionHint,TypeRole.HINT);
+            aiHeading(detail,method.questions[page],TypeRole.QUESTION,page==2?"形成回应":"当前问题",thought,attempt,page,refresh,questionHint);
             if(page==2)field(detail,"本次回应","综合前面的发现，写下更准确的理解。",attempt,"response",4,false);
             else field(detail,"我的思考","想到什么就先写下来；想不到可留空继续。",attempt,"note"+page,4,false);
         } else {
@@ -680,7 +695,6 @@ public class MainActivity extends Activity {
             if(thoughts().length()==0) error="请添加至少一个自动想法";
             for(int i=0;i<thoughts().length();i++){JSONObject t=thoughts().optJSONObject(i);if(t.optString("text").trim().isEmpty()||!t.has("before"))error="请填写每条想法，并评估相信程度";}
         }
-        if(step==3)for(String key:new String[]{"benefits","values"})if(active.optString(key).trim().isEmpty())error="请填写情绪或想法的益处，以及它反映的品质";
         if(step==4)for(String name:EMOTIONS)if(hasEmotion(name)&&!emotions().optJSONObject(name).has("target"))error="请评估各项情绪的目标强度";
         if(step==5) for(int i=0;i<thoughts().length();i++){JSONObject t=thoughts().optJSONObject(i);if(isSelected(t)&&(t.optString("response").trim().isEmpty()||!t.has("responseBelief"))){error="请点开想法 "+(i+1)+"，补充回应和相信程度，或保存为稍后继续";break;}}
         if(step==6)for(String name:EMOTIONS)if(hasEmotion(name)&&!emotions().optJSONObject(name).has("after"))error="请评估每项情绪现在的强度";
@@ -755,7 +769,7 @@ public class MainActivity extends Activity {
         if(!active.optString("context").trim().isEmpty())summaryValue(body,active.optString("context"));
         sectionLabel(body,"正向重构");
         summaryField(body,"可能的益处",active.optString("benefits"));
-        summaryField(body,"重视的品质",active.optString("values"));
+        summaryField(body,"可能体现的可贵之处",active.optString("values"));
         if(!active.optString("understanding").trim().isEmpty())summaryField(body,"可以理解的原因",active.optString("understanding"));
         if(thoughts().length()>0)sectionLabel(body,"想法");
         for(int i=0;i<thoughts().length();i++){
