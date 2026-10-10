@@ -34,8 +34,38 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: apk-signing
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read and validate app version
+        id: version
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import re
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          manifest = ET.parse("AndroidManifest.xml").getroot()
+          android = "{http://schemas.android.com/apk/res/android}"
+          version = manifest.attrib[android + "versionName"]
+          code = manifest.attrib[android + "versionCode"]
+          if not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", version):
+              raise SystemExit("versionName must be a numeric release version")
+          if not code.isdigit() or int(code) < 1:
+              raise SystemExit("versionCode must be a positive integer")
+          gradle = Path("app/build.gradle").read_text()
+          gradle_version = re.search(r"versionName\s+['\"]([^'\"]+)['\"]", gradle)
+          gradle_code = re.search(r"versionCode\s+([0-9]+)", gradle)
+          if not gradle_version or gradle_version.group(1) != version:
+              raise SystemExit("Manifest and Gradle versionName must match")
+          if not gradle_code or gradle_code.group(1) != code:
+              raise SystemExit("Manifest and Gradle versionCode must match")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"version={version}\n")
+          PYTHON
 
       - uses: actions/setup-java@v4
         with:
@@ -66,8 +96,12 @@ jobs:
           actual="$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs build/xinqing.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
           test "$actual" = 'fe3b1e7e7c5479381c932073c3bead23909ae57e9e3d36c47e89d7991d1d3d06'
 
+      - name: Verify APK alignment
+        run: '"$ANDROID_HOME/build-tools/34.0.0/zipalign" -c 4 build/xinqing.apk'
+
       - name: Remove signing key
-        run: rm build/debug.keystore
+        if: always()
+        run: rm -f build/debug.keystore
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -75,3 +109,63 @@ jobs:
           name: xinqing-debug-apk
           path: build/xinqing.apk
           if-no-files-found: error
+
+  release:
+    needs: signed-apk
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ needs.signed-apk.outputs.version }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.signed-apk.outputs.version }}
+      RELEASE_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download signed APK
+        uses: actions/download-artifact@v4
+        with:
+          name: xinqing-debug-apk
+          path: build/release
+
+      - name: Publish a new app version
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if gh release view "$tag" --json isDraft --jq '.isDraft' > build/release-is-draft.txt 2> build/release-lookup-error.txt; then
+            if [ "$(cat build/release-is-draft.txt)" = 'false' ]; then
+              echo "$tag is already published; keeping its APK and notes."
+              exit 0
+            fi
+            existing_commit="$(gh api "repos/$GH_REPO/commits/$tag" --jq '.sha')"
+            if [ "$existing_commit" != "$RELEASE_COMMIT" ]; then
+              echo "Existing draft $tag belongs to another commit; increment the app version."
+              exit 1
+            fi
+          fi
+
+          apk="build/release/xinqing-$VERSION.apk"
+          mv build/release/xinqing.apk "$apk"
+          (cd build/release && sha256sum "xinqing-$VERSION.apk" > SHA256SUMS.txt)
+
+          notes="build/release-notes.md"
+          if [ -f "docs/releases/$VERSION.md" ]; then
+            cp "docs/releases/$VERSION.md" "$notes"
+          else
+            gh api "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$tag" -f target_commitish="$RELEASE_COMMIT" --jq '.body' > "$notes"
+          fi
+          printf '\n\n安装：下载 xinqing-%s.apk，在 Android 8.0 及以上设备打开安装。已安装旧版可直接覆盖升级。\n\n附件 SHA256SUMS.txt 提供 APK 的 SHA-256 校验值。\n' "$VERSION" >> "$notes"
+
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            gh release create "$tag" --draft --target "$RELEASE_COMMIT" \
+              --title "心晴 $VERSION" --notes-file "$notes"
+          fi
+          gh release upload "$tag" "$apk" build/release/SHA256SUMS.txt --clobber
+          gh release edit "$tag" --draft=false --latest --notes-file "$notes"
+          gh release view "$tag" --json url --jq '.url'
