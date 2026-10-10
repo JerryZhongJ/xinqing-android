@@ -2,6 +2,10 @@
 
 跟着《Feeling Great》的思路，写下一个让自己难受的瞬间，理解感受，重新看看脑海里的想法。适用于 Android 8.0 及以上版本。
 
+## 下载安装
+
+前往 [GitHub Releases 下载最新 APK](https://github.com/JerryZhongJ/xinqing-android/releases/latest)，在手机上打开 `.apk` 文件安装。首次安装时，按系统提示允许当前来源安装应用；已安装旧版可直接覆盖升级。
+
 ## 三个特点
 
 1. **完整的记录流程**：依照 David D. Burns《Feeling Great》与 Daily Mood Log 的指引设计，从具体情境、情绪、自动想法，走到正向重构、目标情绪、探索想法和重新评估。一步步完成，也可以保存草稿，稍后继续。
