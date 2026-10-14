@@ -118,6 +118,7 @@ public class MainActivity extends Activity {
             if(rating==null){rating=new JSONObject();put(ratings,name,rating);}
             if(!rating.has("before"))put(rating,"before",0);
         }
+        try{MethodRecords.prepareEntry(entry);}catch(JSONException e){storageReadable=false;toast("方法记录读取失败，已停止写入以保护原数据");}
     }
     private void changed() { if(active!=null) put(active,"updated",System.currentTimeMillis()); handler.removeCallbacks(saveTask); handler.postDelayed(saveTask,350); }
     private void persist() { if (storageReadable && !getPreferences(0).edit().putString("entries",entries.toString()).commit()) toast("保存失败，请检查设备空间"); }
@@ -325,6 +326,9 @@ public class MainActivity extends Activity {
         aiHeading(parent,heading,headingRole,task,thought,attempt,page,refresh,null);
     }
     private void aiHeading(LinearLayout parent,String heading,TypeRole headingRole,String task,JSONObject thought,JSONObject attempt,int page,Runnable refresh,String hint) {
+        if(!MethodRecords.aiAllowed(task,attempt,page)){
+            styledLabel(parent,heading,headingRole);if(hint!=null&&!hint.isEmpty())styledLabel(parent,hint,TypeRole.HINT);return;
+        }
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
         int headingSize=headingRole==TypeRole.SECTION?17:16;
         TextView question=styledText(heading,headingRole);question.setPadding(0,0,dp(8),0);
@@ -533,7 +537,8 @@ public class MainActivity extends Activity {
                 JSONObject attempt=findMethodRecord(records,method.id);
                 if(attempt==null){
                     attempt=new JSONObject();put(attempt,"id",UUID.randomUUID().toString());put(attempt,"created",System.currentTimeMillis());put(attempt,"method",method.id);put(attempt,"name",method.name);put(attempt,"step",0);
-                    put(attempt,"thought",thought.optString("text"));put(attempt,"before",thought.optInt("after",thought.optInt("before")));records.put(attempt);
+                    put(attempt,"thought",thought.optString("text"));put(attempt,"before",thought.optInt("after",thought.optInt("before")));
+                    try{MethodRecords.prepare(attempt,method);}catch(JSONException e){toast("方法内容无法打开");return;}records.put(attempt);
                 }
                 changed();chooser.dismiss();
                 if(attempt.optBoolean("done")||attempt.optBoolean("noHelp"))attemptHistory(index,attempt);else attemptDialog(index,attempt);
@@ -602,36 +607,62 @@ public class MainActivity extends Activity {
     }
     private void attemptDialog(int index,JSONObject attempt) {
         JSONObject thought=thoughts().optJSONObject(index);ThoughtMethods method=ThoughtMethods.find(attempt.optString("method"));
-        int page=Math.max(0,Math.min(3,attempt.optInt("step")));
-        if(page>=2&&attempt.optString("response").isEmpty()&&!attempt.optString("note2").isEmpty())put(attempt,"response",attempt.optString("note2"));
+        try{MethodRecords.prepare(attempt,method);}catch(JSONException e){toast("方法内容无法打开");return;}
+        ThoughtMethods.Step[] exercise=MethodRecords.steps(attempt);
+        int page=MethodRecords.page(attempt),count=exercise.length;
         final AlertDialog[] host={null};Runnable refresh=()->{host[0].dismiss();attemptDialog(index,attempt);};
         LinearLayout detail=col();detail.setPadding(dp(20),dp(8),dp(20),dp(16));
-        styledLabel(detail,"第 "+(page+1)+" / 4 步",TypeRole.META,GREEN);styledLabel(detail,attempt.optString("thought"),TypeRole.ITEM);
-        if(page==0)styledLabel(detail,"右上角可保存并退出或换方法；已写内容会保留。",TypeRole.HINT);
-        if(page<3) {
-            if(page==2){
-                guide(detail,"回看前两步",attempt.optString("note0")+"\n\n"+attempt.optString("note1"));
-                styledLabel(detail,"把前面的发现汇成一段你认可的回应。这段内容会直接带到最后，无需重写。",TypeRole.HINT);
+        JSONArray rounds=attempt.optJSONArray("rounds");int roundCount=rounds==null?0:rounds.length();
+        styledLabel(detail,(roundCount>0?"第 "+(roundCount+1)+" 轮 · ":"")+"第 "+(page+1)+" / "+(count+1)+" 步",TypeRole.META,GREEN);
+        styledLabel(detail,attempt.optString("thought"),TypeRole.ITEM);
+        if(page==0){
+            styledLabel(detail,"右上角可保存并退出或换方法；已写内容会保留。",TypeRole.HINT);
+            if(!attempt.optString("introduction").isEmpty())styledLabel(detail,attempt.optString("introduction"),TypeRole.HINT);
+        }
+        if(roundCount>0)guide(detail,"回看已保存的练习轮次",practiceRoundsText(attempt));
+        if(page<count){
+            ThoughtMethods.Step current=exercise[page];
+            if(page>0)guide(detail,"回看前面的记录",earlierNotes(attempt,page));
+            String task=current.response()?"形成回应":"当前问题";
+            if(MethodRecords.aiAllowed(task,attempt,page))aiHeading(detail,current.question,TypeRole.QUESTION,task,thought,attempt,page,refresh,current.hint);
+            else{styledLabel(detail,current.question,TypeRole.QUESTION);styledLabel(detail,current.hint,TypeRole.HINT);}
+            if(current.kind.equals("balance")){
+                slider(detail,"好处的分量（代价 = 100 − 好处）",attempt,"benefitWeight",50);
+                field(detail,"我的权衡理由","记录对自己重要的考虑，可留空。",attempt,"note"+page,3,false);
+            }else{
+                field(detail,current.response()?"本次回应":current.observation()?"实际记录":"我的思考",
+                    current.observation()?"只记录实际经历；还没实践时可以先保存草稿。":"想到什么就先写下来；想不到可留空继续。",attempt,MethodRecords.key(attempt,page),4,false);
             }
-            String questionHint=ThoughtMethods.hint(method.id,page);
-            aiHeading(detail,method.questions[page],TypeRole.QUESTION,page==2?"形成回应":"当前问题",thought,attempt,page,refresh,questionHint);
-            if(page==2)field(detail,"本次回应","综合前面的发现，写下更准确的理解。",attempt,"response",4,false);
-            else field(detail,"我的思考","想到什么就先写下来；想不到可留空继续。",attempt,"note"+page,4,false);
-        } else {
-            styledLabel(detail,"把这次发现整理成自己认可的回应。真实困难可以保留，不必勉强说服自己。",TypeRole.HINT);
-            StringBuilder notes=new StringBuilder();for(int i=0;i<3;i++)notes.append(method.questions[i]).append("\n").append(attempt.optString("note"+i)).append("\n\n");
-            guide(detail,"回看本次思考",notes.toString());
-            aiHelp(detail,"形成回应",thought,attempt,page,refresh);styledLabel(detail,attempt.optString("response").isEmpty()?"还没有回应，可以返回上一步填写或请求 AI 补充。":attempt.optString("response"),TypeRole.BODY);
-            detail.addView(textAction("修改回应",GREEN,()->{put(attempt,"step",2);host[0].dismiss();attemptDialog(index,attempt);}));
+            if(current.kind.equals("practice")){
+                CheckBox performed=new CheckBox(this);performed.setText("我已实际进行这一步的练习");performed.setTextSize(14);performed.setTextColor(INK);
+                performed.setChecked(attempt.optBoolean("performed"+page));performed.setOnCheckedChangeListener((button,checked)->{put(attempt,"performed"+page,checked);changed();});detail.addView(performed);
+                if(method.id.equals("exposure")||method.id.equals("cognitive_exposure")||method.id.equals("response_prevention")||method.id.equals("shame_attacking")){
+                    styledLabel(detail,"本轮实际焦虑强度（可选，0 为没有，100 为最强）",TypeRole.HINT);
+                    slider(detail,"练习开始时的焦虑",attempt,"anxietyBefore",0);
+                    slider(detail,"练习过程最高的焦虑",attempt,"anxietyPeak",0);
+                    slider(detail,"练习结束时的焦虑",attempt,"anxietyAfter",0);
+                }
+            }
+        }else{
+            styledLabel(detail,"确认这次回应与实际发现。真实困难和不确定性可以保留，不必勉强说服自己。",TypeRole.HINT);
+            guide(detail,"回看本次思考",MethodRecords.notes(attempt));
+            if(MethodRecords.aiAllowed("形成回应",attempt,page))aiHelp(detail,"形成回应",thought,attempt,page,refresh);
+            styledLabel(detail,attempt.optString("response").isEmpty()?"还没有回应，可以返回填写。":attempt.optString("response"),TypeRole.BODY);
+            detail.addView(textAction("修改回应",GREEN,()->{put(attempt,"step",MethodRecords.responsePage(attempt));host[0].dismiss();attemptDialog(index,attempt);}));
             slider(detail,"对本次回应的相信程度",attempt,"responseBelief",50);
             slider(detail,"现在对原想法的相信程度",attempt,"after",attempt.optInt("before"));
             styledLabel(detail,"新旧想法分别评分，不必相加等于 100。分数不变、升高或对新回应仍不相信，都可以如实保存。",TypeRole.HINT);
+            if(!MethodRecords.practiceComplete(attempt))styledLabel(detail,"本轮仍是计划。实际练习后，在实际记录页勾选已进行；未实践时可保存草稿。",TypeRole.HINT);
+            if(attempt.optBoolean("repeatable"))detail.addView(textAction("保存本轮，继续下一轮练习",GREEN,()->{
+                try{if(!MethodRecords.nextRound(attempt)){toast("请先实际完成本轮，并记录回应与两项评分；也可保存草稿");return;}}catch(JSONException e){toast("本轮无法保存");return;}
+                changed();host[0].dismiss();attemptDialog(index,attempt);
+            }));
         }
         ScrollView scroll=new ScrollView(this);scroll.addView(detail);
         LinearLayout header=dialogHeader(method.name);header.setPadding(dp(20),dp(12),dp(8),dp(8));
         ImageButton more=iconButton(R.drawable.ic_more,"练习操作",()->{});header.addView(more,new LinearLayout.LayoutParams(dp(48),dp(48)));
         AlertDialog.Builder dialogBuilder=new AlertDialog.Builder(this).setCustomTitle(header).setView(dialogFrame(scroll))
-            .setPositiveButton(page==3?"完成本次探索":"下一步",null);
+            .setPositiveButton(page==count?"完成本次探索":"下一步",null);
         if(page>0)dialogBuilder.setNegativeButton("上一步",null);
         AlertDialog dialog=dialogBuilder.create();host[0]=dialog;
         more.setOnClickListener(v->showAttemptMenu(more,dialog,index,attempt));
@@ -650,12 +681,10 @@ public class MainActivity extends Activity {
                 previous.setOnClickListener(v->{put(attempt,"step",page-1);dialog.dismiss();attemptDialog(index,attempt);});
             }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-            if(page<3){put(attempt,"step",page+1);dialog.dismiss();attemptDialog(index,attempt);return;}
-            if(attempt.optString("response").trim().isEmpty()||!attempt.has("responseBelief")||!attempt.has("after")){toast("请记录回应与两项评分；也可以保存退出，或没帮助时换个方法");return;}
-            put(attempt,"done",true);put(attempt,"finished",System.currentTimeMillis());put(attempt,"note2",attempt.optString("response"));
-            for(String key:new String[]{"response","responseBelief","after"})put(thought,key,attempt.opt(key));
-            put(thought,"evidence",attempt.optString("note0")+"\n"+attempt.optString("note1")+"\n"+attempt.optString("note2"));
-            put(thought,"handled",true);put(thought,"selected",true);changed();dialog.dismiss();
+            if(page<count){put(attempt,"step",page+1);dialog.dismiss();attemptDialog(index,attempt);return;}
+            try{if(!MethodRecords.finish(thought,attempt)){toast(MethodRecords.practiceComplete(attempt)?"请记录回应与两项评分；也可以保存退出或换方法":"请实际练习后勾选已进行；也可先保存草稿");return;}}
+            catch(JSONException e){toast("本次记录无法保存");return;}
+            changed();dialog.dismiss();
             });
         });
         dialog.setOnDismissListener(d->{changed();editor();});
@@ -673,12 +702,24 @@ public class MainActivity extends Activity {
         change.setOnClickListener(v->{popup.dismiss();put(attempt,"noHelp",true);put(attempt,"finished",System.currentTimeMillis());changed();dialog.dismiss();methodDialog(index);});items.addView(change);
         popup.showAsDropDown(anchor,0,0,Gravity.END);
     }
-    private String attemptReport(JSONObject attempt) {
-        StringBuilder text=new StringBuilder(attempt.optString("name")+"  "+methodStatus(attempt)+"\n原想法："+attempt.optString("thought")+"\n");
-        ThoughtMethods method=ThoughtMethods.find(attempt.optString("method"));
-        if(method!=null)for(int i=0;i<3;i++)text.append("\n").append(method.questions[i]).append("\n").append(attempt.optString("note"+i)).append("\n");
-        else text.append("\n事实：").append(attempt.optString("evidence")).append("\n");
+    private String earlierNotes(JSONObject attempt,int page) {
+        StringBuilder result=new StringBuilder();for(int i=0;i<page;i++)result.append(MethodRecords.question(attempt,i)).append("\n").append(MethodRecords.answer(attempt,i)).append("\n\n");return result.toString();
+    }
+    private String practiceRoundsText(JSONObject attempt) {
+        StringBuilder result=new StringBuilder();JSONArray rounds=attempt.optJSONArray("rounds");
+        if(rounds!=null)for(int i=0;i<rounds.length();i++)result.append("第 ").append(i+1).append(" 轮\n").append(attemptRoundReport(rounds.optJSONObject(i))).append("\n\n");return result.toString();
+    }
+    private String attemptRoundReport(JSONObject attempt) {
+        StringBuilder text=new StringBuilder();
+        if(MethodRecords.steps(attempt).length>0)text.append(MethodRecords.notes(attempt));
+        else text.append("事实：").append(attempt.optString("evidence")).append("\n");
+        ThoughtMethods.Step[] steps=MethodRecords.steps(attempt);
+        for(int i=0;i<steps.length;i++)if(steps[i].kind.equals("practice"))text.append("实际练习：").append(attempt.optBoolean("performed"+i)?"已进行":"尚未确认").append("\n");
+        for(String[] score:new String[][]{{"anxietyBefore","开始焦虑"},{"anxietyPeak","最高焦虑"},{"anxietyAfter","结束焦虑"}})if(attempt.has(score[0]))text.append(score[1]).append("：").append(percent(attempt,score[0])).append("\n");
         return text.append("\n回应：").append(attempt.optString("response")).append("\n回应相信程度：").append(percent(attempt,"responseBelief")).append("\n原想法相信程度：").append(percent(attempt,"before")).append(" → ").append(percent(attempt,"after")).toString();
+    }
+    private String attemptReport(JSONObject attempt) {
+        return attempt.optString("name")+"  "+methodStatus(attempt)+"\n原想法："+attempt.optString("thought")+"\n"+practiceRoundsText(attempt)+attemptRoundReport(attempt);
     }
     private void attemptHistory(int index,JSONObject attempt) {
         LinearLayout detail=col();detail.setPadding(dp(20),dp(8),dp(20),dp(16));renderAttempt(detail,attempt);
@@ -815,11 +856,18 @@ public class MainActivity extends Activity {
         titleRow.addView(name,new LinearLayout.LayoutParams(0,-2,1));
         titleRow.addView(statusPill(methodStatus(attempt),16));parent.addView(titleRow);
         if(!attempt.optString("thought").trim().isEmpty())summaryField(parent,"原想法",attempt.optString("thought"));
-        ThoughtMethods method=ThoughtMethods.find(attempt.optString("method"));
-        if(method!=null){
-            for(int i=0;i<3;i++)if(!attempt.optString("note"+i).trim().isEmpty())summaryField(parent,method.questions[i],attempt.optString("note"+i));
+        JSONArray rounds=attempt.optJSONArray("rounds");if(rounds!=null&&rounds.length()>0)guide(parent,"此前的练习轮次",practiceRoundsText(attempt));
+        ThoughtMethods.Step[] exercise=MethodRecords.steps(attempt);
+        if(exercise.length>0){
+            for(int i=0;i<exercise.length;i++){
+                if(!exercise[i].response()&&!MethodRecords.answer(attempt,i).trim().isEmpty())summaryField(parent,exercise[i].question,MethodRecords.answer(attempt,i));
+                if(exercise[i].kind.equals("practice"))summaryField(parent,"实际练习",attempt.optBoolean("performed"+i)?"已进行":"尚未确认");
+            }
         }else if(!attempt.optString("evidence").trim().isEmpty())summaryField(parent,"事实",attempt.optString("evidence"));
-        if(!attempt.optString("response").trim().isEmpty())summaryField(parent,"回应",attempt.optString("response"));
+        if(attempt.has("benefitWeight"))scoreRow(parent,"好处 / 代价",attempt.optInt("benefitWeight")+" / "+(100-attempt.optInt("benefitWeight")));
+        for(String[] score:new String[][]{{"anxietyBefore","开始焦虑"},{"anxietyPeak","最高焦虑"},{"anxietyAfter","结束焦虑"}})if(attempt.has(score[0]))scoreRow(parent,score[1],percent(attempt,score[0]));
+        String response=MethodRecords.answer(attempt,MethodRecords.responsePage(attempt));
+        if(!response.trim().isEmpty())summaryField(parent,"回应",response);
         if(attempt.has("responseBelief"))scoreRow(parent,"回应相信程度",percent(attempt,"responseBelief"));
         if(attempt.has("after"))scoreRow(parent,"原想法相信程度",percent(attempt,"before")+" → "+percent(attempt,"after"));
     }

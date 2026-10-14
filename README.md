@@ -9,7 +9,7 @@
 ## 三个特点
 
 1. **完整的记录流程**：依照 David D. Burns《Feeling Great》与 Daily Mood Log 的指引设计，从具体情境、情绪、自动想法，走到正向重构、目标情绪、探索想法和重新评估。一步步完成，也可以保存草稿，稍后继续。
-2. **多种应对想法的方法**：目前内置检验证据、双重标准法、灰度思考、语义法、重新归因、定义用词六种方法。可以尝试不同角度，留下对自己有帮助的回应。我们会持续补充，目标是实现书中介绍的全部方法。
+2. **多种应对想法的方法**：目前内置 16 种方法，包括检验证据、双重标准法、成本收益分析、实验法，以及应对焦虑的暴露和人际练习。可以尝试不同角度，留下对自己有帮助的回应。我们会持续补充，目标是实现书中介绍的全部方法。
 3. **按需 AI 辅助**：想不到怎么写时，可以请 AI 帮忙寻找想法、梳理正向重构、识别认知歪曲、推荐方法或补充回应。建议由你决定是否采用；不使用 AI 也能完成整篇日志。AI 功能需要自行配置 DeepSeek API Key。
 
 ## 界面预览
@@ -21,11 +21,5 @@
 ## 从源码安装
 
 运行 `bash build.sh` 生成 `build/xinqing.apk`，再运行 `adb install -r build/xinqing.apk` 安装到手机。构建需要 JDK 17、Android SDK Platform 34 和 Build Tools 34.0.0。
-
-## 发布新版本
-
-更新 `AndroidManifest.xml` 和 `app/build.gradle` 中的 `versionName`，并递增 `versionCode`；两处必须一致。提交并推送到 `main` 后，GitHub Actions 会使用原有签名构建 APK，自动创建 `v版本号` 的 GitHub Release，并附上 APK 和 `SHA256SUMS.txt`。已发布的版本会跳过，重复运行不会覆盖附件。
-
-可在 `docs/releases/版本号.md` 填写本次更新说明（例如 `docs/releases/1.26.md`）；未提供时使用 GitHub 自动生成的说明。其他分支和 Pull Request 只检查构建。签名密钥继续使用 `apk-signing` 环境中的 `ANDROID_SIGNING_KEY_BASE64`。
 
 日志保存在设备上，不需要账号。只有主动点击 AI 求助时，相关内容才会发送给 DeepSeek。心晴是独立开发的自助记录工具，并非《Feeling Great》官方产品，也不能替代专业诊断或治疗。

@@ -31,7 +31,7 @@ final class AiSuggestions {
         else if(task.equals("正向重构")){result.put("benefits",strings(input,"benefits",2,120));result.put("values",strings(input,"values",2,120));}
         else if(task.equals("识别认知歪曲")||task.equals("选择方法")){
             boolean distort=task.equals("识别认知歪曲");String key=distort?"distortions":"methods",id=distort?"name":"id";
-            JSONArray inputItems=input.getJSONArray(key),items=new JSONArray();if(inputItems.length()>3)throw new JSONException("Too many choices");
+            JSONArray inputItems=input.getJSONArray(key),items=new JSONArray();if(!distort&&inputItems.length()>3)throw new JSONException("Too many choices");
             HashSet<String> seen=new HashSet<>();for(int i=0;i<inputItems.length();i++){
                 JSONObject item=inputItems.getJSONObject(i);String name=text(item,id,50),reason=text(item,"reason",150);
                 if(distort?!Arrays.asList(DISTORTIONS).contains(name):ThoughtMethods.find(name)==null)throw new JSONException("Unknown choice");
@@ -57,6 +57,7 @@ final class AiSuggestions {
         return result.toString().trim();
     }
     static int apply(String task,JSONObject data,JSONObject entry,JSONObject thought,JSONObject attempt,int page) throws JSONException {
+        if((task.equals("当前问题")||task.equals("形成回应"))&&(attempt==null||!MethodRecords.aiAllowed(task,attempt,page)))throw new JSONException("This field needs a real observation or practice confirmation");
         int changes=0;
         if(task.equals("寻找想法")){
             JSONArray existing=entry.getJSONArray("thoughts"),items=data.getJSONArray("thoughts");
@@ -76,7 +77,7 @@ final class AiSuggestions {
             for(int i=0;i<input.length();i++){JSONObject item=input.getJSONObject(i);boolean tried=false;if(used!=null)for(int j=0;j<used.length();j++)if(item.getString("id").equals(used.getJSONObject(j).optString("method")))tried=true;if(!tried)kept.put(item);}
             thought.put("recommendations",kept);changes=kept.length();
         } else {
-            if(task.equals("当前问题")){append(attempt,"note"+page,data.getString("note"));changes++;}
+            if(task.equals("当前问题")){append(attempt,MethodRecords.key(attempt,page),data.getString("note"));changes++;}
             else {append(attempt,"response",data.getString("response"));changes++;}
         }
         return changes;

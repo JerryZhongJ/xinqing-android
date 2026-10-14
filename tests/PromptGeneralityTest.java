@@ -32,13 +32,13 @@ public final class PromptGeneralityTest {
             if(!context.getJSONArray("前面的问题与回答").getJSONObject(0).getString("回答").equals("用户第1步的原文"))throw new AssertionError("Earlier answer lost");
             if(!context.getJSONArray("前面的问题与回答").getJSONObject(1).getString("回答").equals("用户第2步的原文"))throw new AssertionError("Earlier answer lost");
             checks+=3;
-            for(ThoughtMethods method:ThoughtMethods.ALL)for(int page=0;page<4;page++){
+            for(ThoughtMethods method:ThoughtMethods.ALL)for(int page=0;page<=method.steps.length;page++){
                 attempt.put("method",method.id);
-                JSONObject step=AiPrompts.context(page<2?"当前问题":"形成回应",entry,thought,attempt,page);
-                String question=page<3?method.questions[page]:"整合前面回答形成最终回应";
+                JSONObject step=AiPrompts.context(page<method.steps.length&&!method.steps[page].response()?"当前问题":"形成回应",entry,thought,attempt,page);
+                String question=page<method.steps.length?method.questions[page]:MethodRecords.FINAL_QUESTION;
                 if(!step.getString("当前问题").equals(question))throw new AssertionError("Wrong question for method/step");
                 if(!step.getString("方法目的").equals(method.purpose))throw new AssertionError("Method purpose lost");
-                if(step.getJSONArray("前面的问题与回答").length()!=Math.min(page,3))throw new AssertionError("Earlier step context lost");
+                if(step.getJSONArray("前面的问题与回答").length()!=Math.min(page,method.steps.length))throw new AssertionError("Earlier step context lost");
                 checks+=3;
             }
         }
@@ -49,6 +49,26 @@ public final class PromptGeneralityTest {
         if(!step.getString("当前问题").equals(ThoughtMethods.find("evidence").questions[0]))throw new AssertionError("Question changed");
         if(!step.getString("当前问题补充说明").equals(ThoughtMethods.hint("evidence",0)))throw new AssertionError("Hint missing");
         checks+=2;
+        JSONObject recognition=AiPrompts.context("识别认知歪曲",entry,new JSONObject().put("text","当前要检验的想法"),null,0);
+        JSONObject guide=recognition.getJSONObject("认知歪曲参考说明");
+        JSONArray candidates=recognition.getJSONArray("候选类型"),definitions=guide.getJSONArray("类型说明");
+        if(definitions.length()!=candidates.length())throw new AssertionError("Every candidate needs a sourced explanation");
+        java.util.HashSet<String> explained=new java.util.HashSet<>();
+        for(int i=0;i<definitions.length();i++){
+            JSONObject definition=definitions.getJSONObject(i);String name=definition.getString("name");
+            if(!java.util.Arrays.asList(AiSuggestions.DISTORTIONS).contains(name)||!explained.add(name))throw new AssertionError("Explanation must identify one distinct allowed choice");
+            if(definition.getString("核心含义").trim().isEmpty()||definition.getString("补充说明").trim().isEmpty())throw new AssertionError("Explanations need content beyond type names");
+            JSONArray sources=definition.getJSONArray("来源");if(sources.length()==0)throw new AssertionError("Explanations need a reference");
+            for(int j=0;j<sources.length();j++)if(!sources.getString(j).startsWith("https://feelinggood.com/"))throw new AssertionError("Distortion references must use Burns' first-party website");
+            checks+=3;
+        }
+        if(!recognition.getString("当前想法").equals("当前要检验的想法"))throw new AssertionError("Reference material cannot replace the user's thought");
+        if(!guide.getString("提醒来源").startsWith("https://feelinggood.com/"))throw new AssertionError("Boundary reminder needs a first-party reference");
+        checks+=3;
+        for(String task:AiPrompts.TASKS)if(!task.equals("识别认知歪曲")){
+            if(AiPrompts.context(task,entry,new JSONObject().put("text","另一个想法"),null,0).has("认知歪曲参考说明"))throw new AssertionError("Detailed distortion reference belongs only in the recognition request");
+            checks++;
+        }
         System.out.println(checks+" prompt/context checks passed across four scenarios; no model-output quality claim");
     }
 }

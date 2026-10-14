@@ -26,12 +26,25 @@ public final class AiSuggestionsTest {
         AiSuggestions.apply("识别认知歪曲",distort,entry,thought,null,0);
         check(thought.getJSONObject("distortions").getBoolean("读心术"),"manual distortion retained");
         check(thought.getJSONObject("distortions").getBoolean("非黑即白"),"AI distortion added");
+        JSONArray allDistortions=new JSONArray();
+        for(String name:AiSuggestions.DISTORTIONS)allDistortions.put(new JSONObject().put("name",name).put("reason","对应当前想法的具体判断"));
+        allDistortions.put(new JSONObject().put("name","非黑即白").put("reason","重复的类型"));
+        JSONObject fullResult=result("识别认知歪曲",new JSONObject().put("distortions",allDistortions).toString());
+        check(fullResult.getJSONArray("distortions").length()==AiSuggestions.DISTORTIONS.length,"all available distortion types accepted beyond three and duplicate types removed");
+        JSONObject fullThought=new JSONObject().put("distortions",new JSONObject()).put("recommendations",new JSONArray().put("旧推荐"));
+        AiSuggestions.apply("识别认知歪曲",fullResult,entry,fullThought,null,0);
+        for(String name:AiSuggestions.DISTORTIONS){
+            check(fullThought.getJSONObject("distortions").getBoolean(name),"every returned distortion remains selectable");
+            check(fullThought.getJSONObject("distortionReasons").getString(name).equals("对应当前想法的具体判断"),"every returned reason is saved without truncation");
+        }
+        check(!fullThought.has("recommendations"),"expanded distortion results invalidate earlier method recommendations");
+        check(result("识别认知歪曲","{\"distortions\":[]}").getJSONArray("distortions").length()==0,"no distortion is a valid result");
         thought.put("attempts",new JSONArray().put(new JSONObject().put("method","evidence").put("noHelp",true)));
         JSONObject methods=result("选择方法","{\"methods\":[{\"id\":\"gray\",\"reason\":\"适合两个极端的判断\"},{\"id\":\"evidence\",\"reason\":\"检查事实\"}]}");
         AiSuggestions.apply("选择方法",methods,entry,thought,null,0);
         check(thought.getJSONArray("recommendations").length()==1,"used methods filtered");
         check(thought.getJSONArray("recommendations").getJSONObject(0).getString("id").equals("gray"),"ranking preserved");
-        JSONObject attempt=new JSONObject().put("note0","我的笔记").put("response","我的回应").put("after",60);
+        JSONObject attempt=new JSONObject().put("method","gray").put("note0","我的笔记").put("response","我的回应").put("after",60);
         JSONObject note=result("当前问题","{\"note\":\"有其他中间结果\",\"response\":\"我可以有不足而非全盘失败\",\"after\":0}");
         AiSuggestions.apply("当前问题",note,entry,thought,attempt,0);
         check(attempt.getString("note0").equals("我的笔记\n有其他中间结果"),"notes appended");
@@ -43,6 +56,8 @@ public final class AiSuggestionsTest {
         invalid("寻找想法","not json");invalid("寻找想法","{\"thoughts\":[3]}");invalid("正向重构","{\"benefits\":[\"abc\"]}");
         invalid("识别认知歪曲","{\"distortions\":[{\"name\":\"非黑即白\",\"reason\":\"ok\"},{\"name\":\"未知类型\",\"reason\":\"bad\"}]}");
         invalid("选择方法","{\"methods\":[{\"id\":\"invented\",\"reason\":\"bad\"}]}");
+        invalid("选择方法","{\"methods\":[{\"id\":\"paradoxical_double_standard\",\"reason\":\"此前的推荐\"}]}");
+        invalid("选择方法","{\"methods\":[{\"id\":\"gray\",\"reason\":\"检查两极判断\"},{\"id\":\"evidence\",\"reason\":\"检查事实\"},{\"id\":\"semantic\",\"reason\":\"检查要求\"},{\"id\":\"define\",\"reason\":\"检查标签\"}]}");
         invalid("形成回应","{\"response\":\"\"}");
         invalid("形成回应","{\"response\":\"abc\"} extra text");
         check(before.equals(entry.toString()),"invalid results do not mutate records");

@@ -6,8 +6,8 @@ android {
         applicationId 'cn.xinqing.journal'
         minSdk 26
         targetSdk 34
-        versionCode 27
-        versionName '1.26'
+        versionCode 28
+        versionName '1.27'
     }
     sourceSets.main {
         manifest.srcFile '../AndroidManifest.xml'
